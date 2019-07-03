@@ -1,0 +1,121 @@
+---
+title: "Electricity Generation and Distribution in South Africa"
+author: "christopher barkhuizen"
+date: "02/07/2019"
+output: 
+  ioslides_presentation: 
+    keep_md: yes
+    logo: cooling.jpg
+    widescreen: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+
+library(xlsx)
+library(dplyr)
+library(leaflet)
+library(plotly)
+library(tidyr)
+library(reshape)
+library(Hmisc)
+```
+
+## The Data
+
+The Data is taken from Statistics South Africa and relates to Energy generation and distribution in South Africa from 2000 to 2018.   
+![Stats SA](figure2.jpg) 
+
+The data can be found [here](http://www.statssa.gov.za/timeseriesdata/Excel/P4141%20Electricity%20generated%20and%20available%20for%20distribution%20(201904).zip)
+
+## Cleaning the Data
+
+The Data is in a very messy state with column data in rows and vice versa.   
+
+We take the following steps to clean the data for analysis:
+
+- Merge some of the description fields 
+- Eliminate columns not used in the analysis
+- Convert column headings date format from MO122018 to 01122018
+- Use melt to Convert the 231 date columns to 2 columns (datum, value)
+
+## Cleaning the Data
+
+```{r read_data, echo = FALSE}
+electrical <- read.csv("~/Documents/R_projects/Developing Data Products/data/electricity.csv", sep = ";", stringsAsFactors = F)
+```
+
+```{r data_cleanup, echo = TRUE}
+# clean up names and merge certain columns so that we condense the descriptive info 
+
+electrical_clean <- electrical %>% select(4:length(electrical)) %>% 
+  mutate(H13 = paste(H05, H13, H14, H16)) %>% select(-H05, -H14, -H16, -H18, -H25)
+electrical_names <- names(electrical_clean)
+names(electrical_clean) <- gsub('^MO','01', electrical_names)
+names(electrical_clean)[1:3] <- c("metric","description","unit")
+
+# melt df so that we have one column with all the metrics and one columns with the date
+
+electrical_clean <- electrical_clean %>%  
+                    melt(id =c("metric","description","unit"),na.rm=T) %>% 
+                    mutate(variable = as.character(variable), 
+                           metric = as.factor(metric), description = as.factor(description), 
+                           unit = as.factor(unit)) %>% 
+                    mutate(variable = as.Date(variable, format = "%d%m%Y")) 
+names(electrical_clean)[4] <- c("datum")
+```
+
+## Electricity Generation 1   
+
+```{r generation}
+x <- list(
+  title = ""
+)
+y <- list(
+  title = "Power (Gigawatt Hours)"
+)
+
+electrical_generation <- electrical_clean[grep(pattern = 'distributed', x = electrical_clean$metric, invert = TRUE),] 
+electrical_generation <- electrical_generation[grep(pattern = 'import|export|aux', x = electrical_generation$description, invert = TRUE),] 
+electrical_generation <- electrical_generation[grep('Gigawatt', electrical_generation$unit),]
+
+
+plot_ly(data = electrical_generation, x = ~datum, y = ~value, type = 'scatter', mode = 'lines', color = ~description, colors = 'Set1') %>%layout(title = 'Electricity Generation', xaxis = x, yaxis = y, legend = list(orientation = "h"))
+
+```
+   
+## Electricity Generation 2   
+```{r generation_2}
+
+
+electrical_generation_norm <- electrical_clean[grep(pattern = 'distributed', x = electrical_clean$metric, invert = TRUE),] 
+electrical_generation_norm <- electrical_generation_norm[grep(pattern = 'import|export|aux', x = electrical_generation_norm$description),] 
+#electrical_generation_norm <- electrical_generation_norm[grep('Gigawatt', electrical_generation$unit, invert = TRUE),]
+
+x <- list(
+  title = ""
+)
+y <- list(
+  title = "Power"
+)
+
+plot_ly(data = electrical_generation_norm, x = ~datum, y = ~value, type = 'scatter', mode = 'lines', color = ~description, colors = 'Set1') %>%layout(title = 'Electricity Generation', xaxis = x, yaxis = y, legend = list(orientation = "h"))
+
+```
+
+
+## Electricity Distribution by Province
+
+```{r distribution}
+
+electrical_distribution <- electrical_clean[grep('Province', electrical_clean$description),]
+
+x <- list(
+  title = ""
+)
+y <- list(
+  title = "Power (GigaWatt Hours)"
+)
+plot_ly(data = electrical_distribution, x = ~datum, y = ~value, type = 'scatter', mode = 'lines', color = ~description, colors = 'Set1') %>%layout(title = 'Electricity Distribution by Province', xaxis = x, yaxis = y, legend = list(orientation = "h"))
+```
+      
